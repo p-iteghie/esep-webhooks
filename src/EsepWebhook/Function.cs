@@ -1,4 +1,3 @@
-// References: Assignmnent 10 PDF code reference on slide 7 
 using Amazon.Lambda.Core;
 using System.Text;
 using Newtonsoft.Json;
