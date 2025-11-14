@@ -31,6 +31,13 @@ public class Function
         var response = client.Send(webRequest);
         using var reader = new StreamReader(response.Content.ReadAsStream());
             
-        return reader.ReadToEnd();
+        return  new APIGatewayProxyResponse
+        {
+            StatusCode = 200,
+            Body = "Message sent to Slack",
+            Headers = new Dictionary<string, string> { 
+                { "Content-Type", "application/json" } 
+            }
+        };
     }
 }
