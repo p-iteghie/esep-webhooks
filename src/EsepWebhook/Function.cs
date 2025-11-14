@@ -1,7 +1,8 @@
-using System.Text;
+// References: Assignmnent 10 PDF code reference on slide 7 
 using Amazon.Lambda.Core;
+using System.Text;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using Amazon.Lambda.APIGatewayEvents;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
 [assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
@@ -10,81 +11,34 @@ namespace EsepWebhook;
 
 public class Function
 {
-    public async Task<string> FunctionHandler(Stream input, ILambdaContext context)
+    public APIGatewayProxyResponse FunctionHandler(APIGatewayProxyRequest input, ILambdaContext context)
     {
-        string body;
-        using (var reader = new StreamReader(input))
+        context.Logger.LogInformation($"FunctionHandler received: {input.Body}");
+
+        dynamic json = JsonConvert.DeserializeObject<dynamic>(input.Body);
+
+        var message = new
         {
-            body = await reader.ReadToEndAsync();
-        }
+            text = $"Issue Created: {json.issue.html_url}"
+        };
+        string payload = JsonConvert.SerializeObject(message);
+
+        var client = new HttpClient();
         
-        context.Logger.LogLine($"Raw input: {body}");
-        
-        try
+        var webRequest = new HttpRequestMessage(HttpMethod.Post, Environment.GetEnvironmentVariable("SLACK_URL"))
         {
-            // First, try to parse as API Gateway format
-            var apiGatewayPayload = JObject.Parse(body);
-            
-            // Check if it's wrapped in API Gateway format (has "body" property)
-            if (apiGatewayPayload["body"] != null)
-            {
-                // Extract the actual GitHub payload from the "body" field
-                var githubPayloadString = apiGatewayPayload["body"].ToString();
-                context.Logger.LogLine($"GitHub payload: {githubPayloadString}");
-                
-                var githubPayload = JObject.Parse(githubPayloadString);
-                var issueUrl = githubPayload["issue"]?["html_url"]?.ToString();
-                
-                if (string.IsNullOrEmpty(issueUrl))
-                {
-                    context.Logger.LogLine("No issue URL found in payload");
-                    return "No issue URL found";
-                }
+            Content = new StringContent(payload, Encoding.UTF8, "application/json")
+        };
 
-                // Send to Slack
-                var message = new { text = $"Issue Created: {issueUrl}" };
-                string payload = JsonConvert.SerializeObject(message);
+        var response = client.Send(webRequest);
 
-                using var client = new HttpClient();
-                var slackUrl = Environment.GetEnvironmentVariable("SLACK_URL");
-                var content = new StringContent(payload, Encoding.UTF8, "application/json");
-
-                var response = await client.PostAsync(slackUrl, content);
-                
-                context.Logger.LogLine($"Slack response: {response.StatusCode}");
-
-                return "Message sent to Slack";
-            }
-            else
-            {
-                // It's already the GitHub payload directly
-                var issueUrl = apiGatewayPayload["issue"]?["html_url"]?.ToString();
-                
-                if (string.IsNullOrEmpty(issueUrl))
-                {
-                    context.Logger.LogLine("No issue URL found in payload");
-                    return "No issue URL found";
-                }
-
-                // Send to Slack
-                var message = new { text = $"Issue Created: {issueUrl}" };
-                string payload = JsonConvert.SerializeObject(message);
-
-                using var client = new HttpClient();
-                var slackUrl = Environment.GetEnvironmentVariable("SLACK_URL");
-                var content = new StringContent(payload, Encoding.UTF8, "application/json");
-
-                var response = await client.PostAsync(slackUrl, content);
-                
-                context.Logger.LogLine($"Slack response: {response.StatusCode}");
-
-                return "Message sent to Slack";
-            }
-        }
-        catch (Exception ex)
+        return new APIGatewayProxyResponse
         {
-            context.Logger.LogLine($"Error: {ex.Message}");
-            throw;
-        }
+            StatusCode = 200,
+            Body = "Message sent to Slack",
+            Headers = new Dictionary<string, string> { 
+                { "Content-Type", "application/json" } 
+            }
+        };
     }
 }
