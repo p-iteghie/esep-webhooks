@@ -19,30 +19,27 @@ public class Function
     /// <returns></returns>
     public APIGatewayProxyResponse FunctionHandler(APIGatewayProxyRequest input, ILambdaContext context)
     {
-        dynamic json = JsonConvert.DeserializeObject<dynamic>(input.Body);
+        dynamic deserialize = JsonConvert.DeserializeObject(input.Body);
 
-        var message = new
-        {
-            text = $"Issue Created: {json.issue.html_url}"
-        };
-        string payload = JsonConvert.SerializeObject(message);
+        string payload = JsonConvert.SerializeObject(new { text = $"Issue Created: {deserialize.issue.html_url}" });
 
         var client = new HttpClient();
-        
-        var webRequest = new HttpRequestMessage(HttpMethod.Post, Environment.GetEnvironmentVariable("SLACK_URL"))
-        {
-            Content = new StringContent(payload, Encoding.UTF8, "application/json")
-        };
 
-        var response = client.Send(webRequest);
+        var environmentVariable = Environment.GetEnvironmentVariable("SLACK_URL");
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-        return new APIGatewayProxyResponse
+        var response = client.PostAsync(
+            environmentVariable,
+            content
+        ).Result;
+
+        var proxyResponse = new APIGatewayProxyResponse
         {
             StatusCode = 200,
-            Body = "Message sent to Slack",
-            Headers = new Dictionary<string, string> { 
-                { "Content-Type", "application/json" } 
-            }
+            Body = response.Content.ReadAsStringAsync().Result,
+            Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
         };
+
+        return proxyResponse;
     }
 }
