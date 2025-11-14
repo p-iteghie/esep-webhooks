@@ -17,22 +17,26 @@ public class Function
     /// <param name="input">The event for the Lambda function handler to process.</param>
     /// <param name="context">The ILambdaContext that provides methods for logging and describing the Lambda environment.</param>
     /// <returns></returns>
-    public string FunctionHandler(string input, ILambdaContext context)
+    public APIGatewayProxyResponse FunctionHandler(APIGatewayProxyRequest input, ILambdaContext context)
     {
-        dynamic json = JsonConvert.DeserializeObject<dynamic>(input.ToString());
+        dynamic json = JsonConvert.DeserializeObject<dynamic>(input.Body);
 
-        string payload = $"{{'text':'Issue Created: {json.issue.html_url}'}}";
+        var message = new
+        {
+            text = $"Issue Created: {json.issue.html_url}"
+        };
+        string payload = JsonConvert.SerializeObject(message);
 
         var client = new HttpClient();
+        
         var webRequest = new HttpRequestMessage(HttpMethod.Post, Environment.GetEnvironmentVariable("SLACK_URL"))
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json")
         };
-    
+
         var response = client.Send(webRequest);
-        using var reader = new StreamReader(response.Content.ReadAsStream());
-            
-        return  new APIGatewayProxyResponse
+
+        return new APIGatewayProxyResponse
         {
             StatusCode = 200,
             Body = "Message sent to Slack",
